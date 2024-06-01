@@ -3,7 +3,7 @@
 client_id = "e2d28087b5c0ecc3a51ac2089905206e"
 name = "cart-snapshot-app"
 handle = "cart-snapshot-app"
-application_url = "https://habitat-herb-worldwide-heart.trycloudflare.com"
+application_url = "https://music-power-sculpture-gently.trycloudflare.com"
 embedded = true
 
 [build]
@@ -17,9 +17,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://habitat-herb-worldwide-heart.trycloudflare.com/auth/callback",
-  "https://habitat-herb-worldwide-heart.trycloudflare.com/auth/shopify/callback",
-  "https://habitat-herb-worldwide-heart.trycloudflare.com/api/auth/callback"
+  "https://music-power-sculpture-gently.trycloudflare.com/auth/callback",
+  "https://music-power-sculpture-gently.trycloudflare.com/auth/shopify/callback",
+  "https://music-power-sculpture-gently.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]

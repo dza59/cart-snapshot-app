@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs, LoaderFunction } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useActionData, useNavigate, useSubmit, useLoaderData } from "@remix-run/react";
 import
 {
@@ -10,14 +11,48 @@ import
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import axios from "axios";
+
+// components
 import Widget from "~/components/Widget";
 
-export const loader = async ({ request }: LoaderFunctionArgs) =>
+
+export const loader: LoaderFunction = async ({ request }) =>
 {
+
   const { admin, session } = await authenticate.admin(request);
-  console.log('admin', admin);
-  console.log('session.shop', session.shop);
-  return null;
+  const storeUrl = encodeURIComponent(session.shop);
+  const apiURL = `http://localhost:3000/api/store/getID?storeUrl=${storeUrl}`;
+  let storeStatus = "existing"; // this is for testing, remove it later
+  try
+  {
+    const idResponse = await axios.get(apiURL);
+
+    let storeId = idResponse.data.storeId;
+
+    // storeID found, fetch the store details, if not found, create a new store record and fetch the details
+    if (!storeId)
+    {
+      const createStore = await axios.post(`http://localhost:3000/api/store`, { storeUrl: decodeURIComponent(storeUrl) });
+      storeId = createStore.data.storeId;
+      storeStatus = "new"
+      console.log('new store, so created in DB', storeId);
+      if (!storeId)
+      {
+        return json({ error: "Failed to create and fetch new store ID." });
+      }
+    }
+
+    // Fetch the store details using the store ID
+    const detailsResponse = await axios.get(`http://localhost:3000/api/store/${storeId}`);
+    const storeDetails = detailsResponse.data;
+
+    return json({ storeStatus: storeStatus, detail: storeDetails });
+  } catch (error)
+  {
+    console.error("Error fetching store details:", error);
+    return json({ error: "Failed to fetch store details." });
+  }
 };
 
 export const action = async ({ request }: ActionFunctionArgs) =>
@@ -41,7 +76,7 @@ export default function Index()
 
   useEffect(() =>
   {
-
+    // console.log('storeUrl dadfdfsds', shopify?.config.shop);
   }, [shopify]);
 
   const handleSetupClick = () =>
