@@ -1,3 +1,4 @@
+// common/components/Widget.tsx
 import { useState, useCallback, useEffect } from "react";
 import
 {
@@ -11,12 +12,19 @@ import
   useBreakpoints,
 } from "@shopify/polaris";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import axios from "axios";
 
-export default function Widget()
+interface WidgetProps
+{
+  storeId: string;
+  initialStatus: boolean;
+}
+
+export default function Widget({ storeId, initialStatus }: WidgetProps)
 {
 
   const shopify = useAppBridge();
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(initialStatus);
   const contentStatus = enabled ? 'Turn off' : 'Turn on';
   const toggleId = 'setting-toggle-uuid';
   const descriptionId = 'setting-toggle-description-uuid';
@@ -24,29 +32,25 @@ export default function Widget()
   const badgeStatus = enabled ? 'success' : undefined;
   const badgeContent = enabled ? 'On' : 'Off';
 
-  const handleToggle = useCallback(() => setEnabled((enabled) => !enabled), []);
 
-  // const handleToggle = useCallback(async () =>
-  // {
-  //   const newEnabledState = !enabled;
-  //   setEnabled(newEnabledState);
+  const handleToggle = useCallback(async () =>
+  {
+    const newState = !enabled;
+    setEnabled(newState);
 
-  //   // Call API with the new state
-  //   if (newEnabledState)
-  //   {
+    // Call API with the new state
+    try
+    {
+      const response = await axios.put(`http://localhost:3000/api/widget/${storeId}`, {
+        status: newState
+      });
+      console.log('API response for widget status update:', response.data);
+    } catch (error)
+    {
+      console.error('Failed to update widget status:', error);
+    }
+  }, [enabled, storeId]);
 
-  //     try
-  //     {
-  //       // TODO: Call API to enable the widget
-  //       console.log('Widget enabled');
-  //       console.log('shopify', shopify);
-
-  //     } catch (error)
-  //     {
-  //       console.error('Failed to update store info:', error);
-  //     }
-  //   }
-  // }, [enabled]);
 
   // smaller components
   const title = 'WIdget';
@@ -60,7 +64,6 @@ export default function Widget()
       {badgeContent}
     </Badge>
   );
-
 
   const settingTitle = title ? (
     <InlineStack gap="200" wrap={false}>

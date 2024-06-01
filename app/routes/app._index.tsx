@@ -7,7 +7,9 @@ import
   Page,
   Layout,
   LegacyCard,
-  EmptyState
+  EmptyState,
+  Card,
+  TextContainer,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -16,13 +18,31 @@ import axios from "axios";
 // components
 import Widget from "~/components/Widget";
 
+// interface
+interface Code
+{
+  code: string;
+  products: number[];
+}
+
+interface storeData
+{
+  detail: {
+    widgetSetting: {
+      status: boolean;
+      color: string;
+      layout: string;
+    };
+    codes: Code[];
+  };
+}
 
 export const loader: LoaderFunction = async ({ request }) =>
 {
 
   const { admin, session } = await authenticate.admin(request);
   const storeUrl = encodeURIComponent(session.shop);
-  const apiURL = `http://localhost:3000/api/store/getID?storeUrl=${storeUrl}`;
+  const apiURL = `http://localhost:3000/api/store/id?storeUrl=${storeUrl}`;
   let storeStatus = "existing"; // this is for testing, remove it later
   try
   {
@@ -55,59 +75,79 @@ export const loader: LoaderFunction = async ({ request }) =>
   }
 };
 
-export const action = async ({ request }: ActionFunctionArgs) =>
-{
-  const { admin, session } = await authenticate.admin(request);
-  console.log('admin', admin);
-  console.log('session', session);
-
-};
 
 export default function Index()
 {
-  const navigate = useNavigate();
-  const actionData = useActionData<typeof action>();
-  const submit = useSubmit();
   const shopify = useAppBridge();
-
   const loaderData: any = useLoaderData();
-  console.log(loaderData);
+  console.log("loaderData", loaderData);
 
+
+  const renderContent = () =>
+  {
+    if (loaderData.detail && loaderData.detail.codes.length === 0 && !loaderData.detail.widgetSetting.status)
+    {
+      // When codes array is empty and widget is off
+      return (
+        <EmptyState
+          heading="No Codes Found"
+          action={{ content: 'Setup Widget', onAction: () => console.log('Setup Widget') }}
+          image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+          fullWidth
+        >
+          <p>Start by setting up the sharing widget.</p>
+        </EmptyState>
+      );
+    } else
+    {
+      return (
+        <Card>
+          <TextContainer>
+            <h2>Total Codes: {loaderData.detail.codes.length}</h2>
+            {loaderData.detail.codes.map((code: Code, index: number) => (
+              <p key={index}>Code: {code.code} - Products Count: {code.products.length}</p>
+            ))}
+          </TextContainer>
+        </Card>
+      );
+    }
+  };
 
   useEffect(() =>
   {
     // console.log('storeUrl dadfdfsds', shopify?.config.shop);
   }, [shopify]);
 
-  const handleSetupClick = () =>
+  const handleStatusChange = async (newStatus: boolean) =>
   {
-    console.log('setup clicked');
+    try
+    {
+      const response = await axios.put(`http://localhost:3000/api/widget/${loaderData.detail._id}`, {
+        status: newStatus
+      });
+      console.log('Status update response:', response.data);
+    } catch (error)
+    {
+      console.error('Failed to update widget status:', error);
+    }
   };
-
 
   return (
     <Page fullWidth>
       <TitleBar title="Cart Snapshot App">
-        <button variant="primary" onClick={handleSetupClick}>
+        {/* <button variant="primary" onClick={handleSetupClick}>
           Setup Widget
-        </button>
+        </button> */}
       </TitleBar>
       <Layout.Section variant="oneHalf">
-        <Widget />
+        <Widget storeId={loaderData.detail._id}
+          initialStatus={loaderData.detail.widgetSetting.status}
+        />
       </Layout.Section>
 
       <Layout.Section variant="oneHalf">
         <LegacyCard sectioned>
-          <EmptyState
-            heading="Set your Widget"
-            action={{ content: 'Setup Widget', onAction: handleSetupClick }}
-            image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-            fullWidth
-          >
-            <p>
-              start by setting the shareing widget
-            </p>
-          </EmptyState>
+          {renderContent()}
         </LegacyCard>
       </Layout.Section>
     </Page>
