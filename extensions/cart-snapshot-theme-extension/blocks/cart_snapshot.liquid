@@ -9,65 +9,161 @@
     height: 100px;
     border-radius: 20px;
   }
+
+  #code-modal {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 1001;
+  }
+
+  #code-modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+  }
 </style>
 
-<!-- Main container where the floating button resides -->
+<!-- Main container -->
 <div id="main">
-  <!-- Floating button with a background color set from the settings -->
+  <!-- Floating button -->
   <button id="cart-snapshot-button" style="background-color: {{ block.settings.colour }};">
     Cart Snapshot
   </button>
+  <!--End Floating button -->
+
+  <!-- The Modal -->
+  <div id="code-modal">
+    <div id="code-modal-content">
+      <span id="close-modal" style="float:right;cursor:pointer;">&times;</span>
+      <p id="code-text">Your link: </p>
+      <button onclick="copyCode()">Copy Link</button>
+    </div>
+  </div>
+  <!--End The Modal -->
+
 </div>
 
 <script>
   // Get the button by its ID
   var button = document.getElementById('cart-snapshot-button');
+  var modal = document.getElementById('code-modal');
+  var closeModal = document.getElementById('close-modal');
+  var codeText = document.getElementById('code-text');
+
+  // TODO: check url if there is cs-code=xxxxx. if found, extract the xxxxx code then send to API to get associated products
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('cs-code');
+  processCodeFromURL(code);
+
+  async function processCodeFromURL(code) {
+    if (code) {
+      console.log('Code found in URL:', code);
+      localStorage.setItem('cart-snapshot-code', code);
+
+      try {
+        const storeId = await getStoreId();
+        console.log('Retrieved Store ID:', storeId);
+        console.log('Store ID Type:', typeof storeId);
+
+        fetchProductsForCode(storeId, code);
+        // Perform further operations with the storeId
+      } catch (error) {
+        console.error('Error while retrieving Store ID:', error);
+      }
+    }
+  }
+
+
+  // Fetch products associated with the code from the API
+  function fetchProductsForCode(storeId, code) {
+    // http://localhost:3000/api/store/665a812dc8b273a922488d0d/codes?code=e4ec456ac893
+    var apiEndpoint = `http://localhost:3000/api/store/${storeId}/codes?code=${code}`;
+
+    fetch(apiEndpoint)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Code details:', data);
+        // Process the data as needed
+      })
+      .catch(error => {
+        console.error('Failed to fetch code details:', error);
+      });
+  }
+
+
+  // copy the code to the clipboard
+  function copyCode() {
+    navigator.clipboard.writeText(codeText.textContent.replace('Your link: ', '')).then(() => {
+      console.log('Link copied to clipboard');
+    });
+  }
+
+  // Close modal
+  closeModal.onclick = function () {
+    modal.style.display = "none";
+  }
+
 
   // Function to handle button click
   function handleButtonClick() {
     getStoreId()
       .then(fetchCartDetails)
       .then(sendProductIdsToStore)
-      .catch(function(error) {
+      .catch(function (error) {
         console.error('Error in process:', error);
       });
   }
 
   // Function to get store ID from localStorage or API
-  function getStoreId() {
-    return new Promise((resolve, reject) => {
-      var storeId = localStorage.getItem('cart-snapshot-app-storeId');
-      if (storeId) {
-        console.log('Using cached Store ID:', storeId);
-        resolve(storeId);
-      } else {
-        var apiEndpoint = 'http://localhost:3000/api/store/id?storeUrl=' + encodeURIComponent(Shopify.shop);
-        fetch(apiEndpoint)
-          .then(function(response) {
-            return response.json();
-          })
-          .then(function(data) {
-            if (data.storeId) {
-              console.log('Store ID fetched:', data.storeId);
-              localStorage.setItem('cart-snapshot-app-storeId', data.storeId);
-              resolve(data.storeId);
-            } else {
-              reject(new Error('Store ID not found'));
-            }
-          })
-          .catch(reject);
+  async function getStoreId() {
+    const cachedStoreId = localStorage.getItem('cart-snapshot-app-storeId');
+    if (cachedStoreId) {
+      console.log('Using cached Store ID:', cachedStoreId);
+      return cachedStoreId;
+    } else {
+      const apiEndpoint = `http://localhost:3000/api/store/id?storeUrl=${encodeURIComponent(Shopify.shop)}`;
+      try {
+        const response = await fetch(apiEndpoint);
+        if (!response.ok) {
+          throw new Error('Failed to fetch store ID from API');
+        }
+        const data = await response.json();
+        if (data && data.storeId) {
+          console.log('Store ID fetched:', data.storeId);
+          localStorage.setItem('cart-snapshot-app-storeId', data.storeId);
+          return data.storeId;
+        } else {
+          throw new Error('Store ID not found in the response');
+        }
+      } catch (error) {
+        console.error('Error fetching store ID:', error);
+        throw error;  // Rethrow the error to be handled by the caller
       }
-    });
+    }
   }
+
+
 
   // get current cart products
   function fetchCartDetails(storeId) {
     return new Promise((resolve, reject) => {
       fetch('/cart.js')
-        .then(function(response) {
+        .then(function (response) {
           return response.json();
         })
-        .then(function(cart) {
+        .then(function (cart) {
           var productIds = cart.items.map(item => item.id);
           console.log('Product IDs in the cart:', productIds);
           resolve({ storeId, productIds });
@@ -86,30 +182,36 @@
       },
       body: JSON.stringify({ storeId: storeId, productIds: productIds })
     })
-    .then(function(response) {
-      console.log('HTTP response from add API:', response);
-      if (!response.ok) {
-        // If the server responded with a non-200 status, throw an error
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    })
-    .then(function(data) {
-      
-      // Log for testing only
-      console.log('Response from sending product IDs:', data);
-      if (data.message) {
-        console.log(data.message);  // Log any messages that come from the server
-      }
-      // Log for testing only
-      if (data.code && data.products) {
-      console.log('Code: ' + data.code + ', Products: ' + data.products.join(', '));
-      }
-    
-    })
-    .catch(function(error) {
-      console.error('Error posting product IDs:', error);
-    });
+      .then(function (response) {
+        console.log('HTTP response from add API:', response);
+        if (!response.ok) {
+          // If the server responded with a non-200 status, throw an error
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(function (data) {
+
+        // Log for testing only
+        console.log('Response from sending product IDs:', data);
+        if (data.message) {
+          console.log(data.message);  // Log any messages that come from the server
+        }
+        // Log for testing only
+        if (data.code && data.products) {
+          console.log('Code: ' + data.code + ', Products: ' + data.products.join(', '));
+        }
+
+        if (data.code) {
+          var fullLink = Shopify.shop + '?cs-code=' + data.code; // Constructing the URL with the code
+          codeText.textContent = 'Your link: ' + fullLink;
+          modal.style.display = "block";
+        }
+
+      })
+      .catch(function (error) {
+        console.error('Error posting product IDs:', error);
+      });
   }
 
 
@@ -119,10 +221,10 @@
 
 {% schema %}
 {
-  "name": "Cart Snapshot App",
-  "target": "section",
-  "settings": [
-    { "type": "color", "id": "colour", "label": "Widget Colour", "default": "#ff0000" }
-  ]
+"name": "Cart Snapshot App",
+"target": "section",
+"settings": [
+{ "type": "color", "id": "colour", "label": "Widget Colour", "default": "#ff0000" }
+]
 }
 {% endschema %}
