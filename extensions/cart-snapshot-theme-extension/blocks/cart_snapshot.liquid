@@ -1,0 +1,128 @@
+<!-- inline styles for the floating button -->
+<style>
+  #cart-snapshot-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    width: 100px;
+    height: 100px;
+    border-radius: 20px;
+  }
+</style>
+
+<!-- Main container where the floating button resides -->
+<div id="main">
+  <!-- Floating button with a background color set from the settings -->
+  <button id="cart-snapshot-button" style="background-color: {{ block.settings.colour }};">
+    Cart Snapshot
+  </button>
+</div>
+
+<script>
+  // Get the button by its ID
+  var button = document.getElementById('cart-snapshot-button');
+
+  // Function to handle button click
+  function handleButtonClick() {
+    getStoreId()
+      .then(fetchCartDetails)
+      .then(sendProductIdsToStore)
+      .catch(function(error) {
+        console.error('Error in process:', error);
+      });
+  }
+
+  // Function to get store ID from localStorage or API
+  function getStoreId() {
+    return new Promise((resolve, reject) => {
+      var storeId = localStorage.getItem('cart-snapshot-app-storeId');
+      if (storeId) {
+        console.log('Using cached Store ID:', storeId);
+        resolve(storeId);
+      } else {
+        var apiEndpoint = 'http://localhost:3000/api/store/id?storeUrl=' + encodeURIComponent(Shopify.shop);
+        fetch(apiEndpoint)
+          .then(function(response) {
+            return response.json();
+          })
+          .then(function(data) {
+            if (data.storeId) {
+              console.log('Store ID fetched:', data.storeId);
+              localStorage.setItem('cart-snapshot-app-storeId', data.storeId);
+              resolve(data.storeId);
+            } else {
+              reject(new Error('Store ID not found'));
+            }
+          })
+          .catch(reject);
+      }
+    });
+  }
+
+  // get current cart products
+  function fetchCartDetails(storeId) {
+    return new Promise((resolve, reject) => {
+      fetch('/cart.js')
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(cart) {
+          var productIds = cart.items.map(item => item.id);
+          console.log('Product IDs in the cart:', productIds);
+          resolve({ storeId, productIds });
+        })
+        .catch(reject);
+    });
+  }
+
+  // send product IDs to your API with the store ID
+  function sendProductIdsToStore({ storeId, productIds }) {
+    var apiEndpoint = 'http://localhost:3000/api/store/add';
+    return fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ storeId: storeId, productIds: productIds })
+    })
+    .then(function(response) {
+      console.log('HTTP response from add API:', response);
+      if (!response.ok) {
+        // If the server responded with a non-200 status, throw an error
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(function(data) {
+      
+      // Log for testing only
+      console.log('Response from sending product IDs:', data);
+      if (data.message) {
+        console.log(data.message);  // Log any messages that come from the server
+      }
+      // Log for testing only
+      if (data.code && data.products) {
+      console.log('Code: ' + data.code + ', Products: ' + data.products.join(', '));
+      }
+    
+    })
+    .catch(function(error) {
+      console.error('Error posting product IDs:', error);
+    });
+  }
+
+
+  // button click event listener
+  button.addEventListener('click', handleButtonClick);
+</script>
+
+{% schema %}
+{
+  "name": "Cart Snapshot App",
+  "target": "section",
+  "settings": [
+    { "type": "color", "id": "colour", "label": "Widget Colour", "default": "#ff0000" }
+  ]
+}
+{% endschema %}
