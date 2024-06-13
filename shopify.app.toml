@@ -3,7 +3,7 @@
 client_id = "e2d28087b5c0ecc3a51ac2089905206e"
 name = "cart-snapshot-app"
 handle = "cart-snapshot-app"
-application_url = "https://default-increased-beaver-sender.trycloudflare.com"
+application_url = "https://wildlife-ups-germany-yes.trycloudflare.com"
 embedded = true
 
 [build]
@@ -17,9 +17,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://default-increased-beaver-sender.trycloudflare.com/auth/callback",
-  "https://default-increased-beaver-sender.trycloudflare.com/auth/shopify/callback",
-  "https://default-increased-beaver-sender.trycloudflare.com/api/auth/callback"
+  "https://wildlife-ups-germany-yes.trycloudflare.com/auth/callback",
+  "https://wildlife-ups-germany-yes.trycloudflare.com/auth/shopify/callback",
+  "https://wildlife-ups-germany-yes.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]

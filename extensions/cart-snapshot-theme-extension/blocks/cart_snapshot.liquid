@@ -1,13 +1,29 @@
 <!-- inline styles for the floating button -->
 <style>
   #cart-snapshot-button {
+    cursor: pointer;
     position: fixed;
     bottom: 20px;
     right: 20px;
     z-index: 1000;
-    width: 100px;
-    height: 100px;
-    border-radius: 20px;
+    width: {{ block.settings.h_w }}px;
+    height: {{ block.settings.h_w }}px;
+    border-radius: {{ block.settings.corner_radius }}px;
+    border: 2px solid {{ block.settings.borderColour }};
+    color: {{block.settings.btnText}};
+    background-color: {{ block.settings.btnColour }};
+        {% case block.settings.desktop_button_alignment %}
+      {% when 'left' %}
+        left: 20px;
+        right: auto;
+      {% when 'center' %}
+        left: 50%;
+        transform: translateX(-50%);
+        right: auto;
+      {% when 'right' %}
+        right: 20px;
+        left: auto;
+    {% endcase %}
   }
 
   #code-modal {
@@ -33,8 +49,8 @@
 <!-- Main container -->
 <div id="main">
   <!-- Floating button -->
-  <button id="cart-snapshot-button" style="background-color: {{ block.settings.colour }};">
-    Cart Snapshot
+  <button id="cart-snapshot-button">
+    {{ block.settings.button_text | escape }}
   </button>
   <!--End Floating button -->
 
@@ -69,11 +85,9 @@
 
       try {
         const storeId = await getStoreId();
-        console.log('Retrieved Store ID:', storeId);
-        console.log('Store ID Type:', typeof storeId);
-
         fetchProductsForCode(storeId, code);
-        // Perform further operations with the storeId
+        
+        // TODO:
       } catch (error) {
         console.error('Error while retrieving Store ID:', error);
       }
@@ -105,8 +119,12 @@
 
   // copy the code to the clipboard
   function copyCode() {
-    navigator.clipboard.writeText(codeText.textContent.replace('Your link: ', '')).then(() => {
+    var textToCopy = codeText.textContent.replace('Your link: ', '');
+    navigator.clipboard.writeText(textToCopy).then(() => {
       console.log('Link copied to clipboard');
+      modal.style.display = "none";
+    }).catch(err => {
+      console.error('Failed to copy the link:', err);
     });
   }
 
@@ -156,63 +174,55 @@
 
 
 
-  // get current cart products
+  // get current cart products and quantities
   function fetchCartDetails(storeId) {
     return new Promise((resolve, reject) => {
       fetch('/cart.js')
-        .then(function (response) {
-          return response.json();
-        })
-        .then(function (cart) {
-          var productIds = cart.items.map(item => item.id);
-          console.log('Product IDs in the cart:', productIds);
-          resolve({ storeId, productIds });
+        .then(response => response.json())
+        .then(cart => {
+          var products = cart.items.map(item => ({
+            productId: item.id.toString(), 
+            quantity: item.quantity        
+          }));
+          console.log('Products in the cart:', products);
+          resolve({ storeId, products });  // Pass products instead of productIds
         })
         .catch(reject);
     });
   }
 
   // send product IDs to your API with the store ID
-  function sendProductIdsToStore({ storeId, productIds }) {
-    var apiEndpoint = 'http://localhost:3000/api/store/add';
-    return fetch(apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ storeId: storeId, productIds: productIds })
+function sendProductIdsToStore({ storeId, products }) {
+  var apiEndpoint = 'http://localhost:3000/api/store/add';
+  return fetch(apiEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ storeId, products })
+  })
+    .then(response => {
+      console.log('HTTP response from add API:', response);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
     })
-      .then(function (response) {
-        console.log('HTTP response from add API:', response);
-        if (!response.ok) {
-          // If the server responded with a non-200 status, throw an error
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then(function (data) {
-
-        // Log for testing only
-        console.log('Response from sending product IDs:', data);
-        if (data.message) {
-          console.log(data.message);  // Log any messages that come from the server
-        }
-        // Log for testing only
-        if (data.code && data.products) {
-          console.log('Code: ' + data.code + ', Products: ' + data.products.join(', '));
-        }
-
-        if (data.code) {
-          var fullLink = Shopify.shop + '?cs-code=' + data.code; // Constructing the URL with the code
-          codeText.textContent = 'Your link: ' + fullLink;
-          modal.style.display = "block";
-        }
-
-      })
-      .catch(function (error) {
-        console.error('Error posting product IDs:', error);
-      });
-  }
+    .then(data => {
+      console.log('Response from sending products:', data);
+      if (data.message) {
+        console.log(data.message);  // Log any messages that come from the server
+      }
+      if (data.code) {
+        var fullLink = `${Shopify.shop}?cs-code=${data.code}`;  // Constructing the URL with the code
+        codeText.textContent = 'Your link: ' + fullLink;
+        modal.style.display = "block";
+      }
+    })
+    .catch(error => {
+      console.error('Error posting product details:', error);
+    });
+}
 
 
   // button click event listener
@@ -224,7 +234,54 @@
 "name": "Cart Snapshot App",
 "target": "section",
 "settings": [
-{ "type": "color", "id": "colour", "label": "Widget Colour", "default": "#ff0000" }
+{
+"type": "text",
+"id": "button_text",
+"label": "Button Text",
+"default": "Cart Snapshot"
+},
+{ "type": "color", "id": "btnColour", "label": "Button Colour", "default": "#ff0000" },
+{ "type": "color", "id": "btnText", "label": "Text Colour", "default": "#ffffff" },
+{ "type": "color", "id": "borderColour", "label": "Border Colour", "default": "#000000" },
+{
+  "type": "select",
+  "id": "desktop_button_alignment",
+  "label": "Desktop Content Alignment",
+  "info": "button always on the bottom of the screen",
+  "options": [
+    {
+      "value": "left",
+      "label": "Left"
+    },
+    {
+      "value": "center",
+      "label": "Center"
+    },
+    {
+      "value": "right",
+      "label": "Right"
+    }
+  ],
+  "default": "right"
+},
+{
+  "type": "range",
+  "id": "h_w",
+  "label": "Button Height & Width",
+  "default": 75,
+  "min": 0,
+  "max": 250,
+  "step": 25
+},
+{
+  "type": "range",
+  "id": "corner_radius",
+  "label": "Button Radius",
+  "default": 20,
+  "min": 0,
+  "max": 100,
+  "step": 5
+}
 ]
 }
 {% endschema %}
