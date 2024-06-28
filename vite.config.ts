@@ -52,4 +52,7 @@ export default defineConfig({
   build: {
     assetsInlineLimit: 0,
   },
+  ssr: {
+    noExternal: ["remix-utils"],
+  },
 }) satisfies UserConfig;

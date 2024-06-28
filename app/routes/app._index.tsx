@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, LoaderFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useActionData, useNavigate, useSubmit, useLoaderData } from "@remix-run/react";
@@ -6,7 +6,6 @@ import
 {
   Page,
   Layout,
-  LegacyCard,
   EmptyState,
   Card,
   TextContainer,
@@ -17,25 +16,14 @@ import axios from "axios";
 
 // components
 import Widget from "~/components/Widget";
+import { Chart, registerables } from 'chart.js';
+import { Line } from 'react-chartjs-2';
+Chart.register(...registerables);
+import { ClientOnly } from "remix-utils/client-only";
+
 
 // interface
-interface Code
-{
-  code: string;
-  products: number[];
-}
-
-interface storeData
-{
-  detail: {
-    widgetSetting: {
-      status: boolean;
-      color: string;
-      layout: string;
-    };
-    codes: Code[];
-  };
-}
+import { Code, LoaderData, ChartData } from "~/interfaces";
 
 export const loader: LoaderFunction = async ({ request }) =>
 {
@@ -44,6 +32,8 @@ export const loader: LoaderFunction = async ({ request }) =>
   const storeUrl = encodeURIComponent(session.shop);
   const apiURL = `http://localhost:3000/api/store/id?storeUrl=${storeUrl}`;
   let storeStatus = "existing"; // this is for testing, remove it later
+
+
   try
   {
     const idResponse = await axios.get(apiURL);
@@ -79,76 +69,83 @@ export const loader: LoaderFunction = async ({ request }) =>
 export default function Index()
 {
   const shopify = useAppBridge();
-  const loaderData: any = useLoaderData();
-  console.log("loaderData", loaderData);
+  const { detail } = useLoaderData<LoaderData>();
+  console.log("detail", detail);
+  const [chartData, setChartData] = useState<ChartData>({
+    labels: [],
+    datasets: [{
+      label: 'Number of Codes Generated',
+      data: [],
+      borderColor: 'rgb(75, 192, 192)',
+      backgroundColor: 'rgba(75, 192, 192, 0.5)',
+    }]
+  });
 
-
-  const renderContent = () =>
-  {
-    if (loaderData.detail && loaderData.detail.codes.length === 0 && !loaderData.detail.widgetSetting.status)
-    {
-      // When codes array is empty and widget is off
-      return (
-        <EmptyState
-          heading="No Codes Found"
-          action={{ content: 'Setup Widget', onAction: () => console.log('Setup Widget') }}
-          image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-          fullWidth
-        >
-          <p>Start by setting up the sharing widget.</p>
-        </EmptyState>
-      );
-    } else
-    {
-      return (
-        <Card>
-          <TextContainer>
-            <h2>Total Codes: {loaderData.detail.codes.length}</h2>
-            {loaderData.detail.codes.map((code: Code, index: number) => (
-              <p key={index}>Code: {code.code} - Products Count: {code.products.length}</p>
-            ))}
-          </TextContainer>
-        </Card>
-      );
-    }
-  };
 
   useEffect(() =>
   {
-    // console.log('storeUrl dadfdfsds', shopify?.config.shop);
-  }, [shopify]);
+    if (detail.codes.length)
+    {
+      const dates = detail.codes.map(code => new Date(code.createdAt).toLocaleDateString());
+      const counts = detail.codes.map(code => code.products.length);
+      console.log("counts", counts)
 
-  const handleStatusChange = async (newStatus: boolean) =>
-  {
-    try
-    {
-      const response = await axios.put(`http://localhost:3000/api/widget/${loaderData.detail._id}`, {
-        status: newStatus
-      });
-      console.log('Status update response:', response.data);
-    } catch (error)
-    {
-      console.error('Failed to update widget status:', error);
+      setChartData(prevData => ({
+        ...prevData,
+        labels: dates,
+        datasets: [{
+          ...prevData.datasets[0],
+          data: counts
+        }]
+      }));
     }
+  }, [detail.codes]);
+
+  const options = {
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: function (value: any)
+          {
+            return Number.isInteger(value) ? value : '';
+          }
+        }
+      }
+    },
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: 'Code Generation Chart',
+      },
+    },
   };
 
   return (
-    <Page fullWidth>
+    <Page>
       <TitleBar title="Cart Snapshot App">
         {/* <button variant="primary" onClick={handleSetupClick}>
           Setup Widget
         </button> */}
       </TitleBar>
       <Layout.Section variant="oneHalf">
-        <Widget storeId={loaderData.detail._id}
-          initialStatus={loaderData.detail.widgetSetting.status}
-        />
+        <Widget storeId={detail._id} initialStatus={detail.widgetSetting.status} />
+
       </Layout.Section>
 
       <Layout.Section variant="oneHalf">
-        <LegacyCard sectioned>
+        <Card>
+          <ClientOnly fallback={<div>Generating Chart...</div>}>
+            {() => <Line options={options} data={chartData} />}
+          </ClientOnly>
+        </Card>
+        {/* <LegacyCard sectioned>
           {renderContent()}
-        </LegacyCard>
+        </LegacyCard> */}
       </Layout.Section>
     </Page>
   );
